@@ -5,9 +5,11 @@ from peft import PeftModel
 from tqdm import tqdm
 
 # ================= 参数配置 =================
+# 本地预训练模型路径
 MODEL_ID = "/root/autodl-tmp/DeepSeek-1.5B"
 BASELINE_LORA_PATH = "./output/deepseek-lora-train-out/final" 
 OURS_LORA_PATH = "./output/het_rank_focal_out/final"
+# 结果输出
 OUTPUT_CSV = "eval_results.csv"
 
 # 甄嬛专属风格词典
