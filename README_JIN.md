@@ -43,6 +43,13 @@
   - 采用 Memcached + PyMySQL 混合存储，设计会话状态管理与 RBAC 权限分级
   - 完成多主机指标采集、ECharts 图表展示及高并发数据上报逻辑
 - **项目成果**：软件著作权一项（登记号 **2025SR0768377**）
+
+### 5. LLaMA-Factory 平台实践与复现
+
+- **项目简介**：基于 LLaMA-Factory 开源微调框架，在 AutoDL 环境下系统体验大模型全流程微调与部署，复现了 LoRA、QLoRA、Freeze 等主流高效微调方法，并验证了模型量化、推理加速等工程能力。
+- **核心工作**：
+  - 配置 LLaMA-Factory 环境（路径 `/autodl-tmp/llama-factory/`），完成数据准备、模型加载与微调脚本编写
+  - 使用 Qwen / DeepSeek 系列模型进行指令微调与角色对话实验，记录训练损失、显存占用及推理效果
 ---
 
 ## 🛠️ 技术栈 (Tech Stack)
