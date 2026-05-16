@@ -8,14 +8,12 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, TaskType
 from trl import SFTTrainer
 
-# ================= 1. 参数配置 =================
 # 拉取预训练模型的地址，也可以是本地下载好的绝对路径
 # 我这里HuggingFace底层服务限制了我的访问，可能是python自动下载较大文件会导致连接不稳定或者拒绝请求，因此我选择使用本地路径
 MODEL_ID = "/root/autodl-tmp/DeepSeek-1.5B" 
 DATASET_PATH = "/root/autodl-tmp/DeepSeek_LoRA_Project/data/huanhuan.json" # 数据集路径
 OUTPUT_DIR = "./output/deepseek-lora-out" # 微调后的模型路径
 
-# ================= 2. 加载模型与分词器 =================
 print("加载模型与分词器...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
 # Qwen/DeepSeek 系列通常没有默认的 pad_token，我们指定 eos_token 作为 pad_token
@@ -29,21 +27,19 @@ model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True
 )
 
-# ================= 3. 配置 LoRA 算法 =================
 print("注入 LoRA 适配器...")
 lora_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
-    r=16,               # 对应 PPT 中的 --lora_rank 16
+    r=16,               
     lora_alpha=32,      # 缩放系数，通常为 rank 的 2 倍
     lora_dropout=0.05,
     # 针对 Qwen 架构，通常将 LoRA 注入到注意力层和前馈层
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"] 
 )
-# 将基座模型包装成 PEFT 模型 (此时可训练参数骤降至约 0.1%)
+# 将基座模型包装成 PEFT 模型
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
-# ================= 4. 数据集处理 =================
 print("加载并格式化数据集...")
 dataset = load_dataset("json", data_files=DATASET_PATH, split="train")
 
@@ -69,17 +65,16 @@ def format_instruction(example):
 # 映射数据集
 formatted_dataset = dataset.map(format_instruction)
 
-# ================= 5. 设置训练参数 =================
 print("初始化训练器...")
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
-    per_device_train_batch_size=2,      # 对应 PPT --per_device_train_batch_size 2
-    gradient_accumulation_steps=4,      # 对应 PPT --gradient_accumulation_steps 4
-    learning_rate=5e-5,                 # 对应 PPT --learning_rate 5e-5
-    num_train_epochs=3,                 # 对应 PPT --num_train_epochs 3
+    per_device_train_batch_size=2,      
+    gradient_accumulation_steps=4,      
+    learning_rate=5e-5,                 
+    num_train_epochs=3,                 
     logging_steps=10,                   # 每 10 步打印一次 loss
     save_strategy="epoch",              # 每个 epoch 保存一次权重
-    bf16=True,                          # 对应 PPT 中的 --fp16 (由于是Ampere以上显卡推荐用bf16，更稳定)
+    bf16=True,                          
     optim="adamw_torch",
     report_to="none"                    # 暂时关闭 wandb 监控
 )
@@ -94,7 +89,6 @@ trainer = SFTTrainer(
     args=training_args,
 )
 
-# ================= 6. 开始训练 =================
 print("🚀 开始微调训练！")
 trainer.train()
 
