@@ -9,7 +9,6 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, TaskType
 from trl import SFTTrainer
 
-# 1. 参数配置
 # 预训练模型的路径
 MODEL_ID = "/root/autodl-tmp/DeepSeek-1.5B" 
 # 对话数据路径
@@ -17,7 +16,6 @@ DATASET_PATH = "/root/autodl-tmp/DeepSeek_LoRA_Project/data/huanhuan.json"
 # 微调后的模型位置
 OUTPUT_DIR = "./output/deepseek-lora-train-out"
 
-#  2. 加载模型与分词器
 print("加载模型与分词器...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
@@ -29,7 +27,6 @@ model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True
 )
 
-# 3. 配置LoRA算法
 print("注入 LoRA 适配器...")
 lora_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
@@ -41,7 +38,6 @@ lora_config = LoraConfig(
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
-# 4. 数据集处理与切分
 print("加载并格式化数据集...")
 dataset = load_dataset("json", data_files=DATASET_PATH, split="train")
 
@@ -65,7 +61,6 @@ def format_instruction(example):
 train_dataset = split_dataset["train"].map(format_instruction)
 eval_dataset = split_dataset["test"].map(format_instruction)
 
-# 5. 设置训练参数
 print("初始化训练器...")
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
@@ -85,8 +80,6 @@ training_args = TrainingArguments(
     logging_steps=10,
     bf16=True,
     optim="adamw_torch",
-    
-    # 开启 TensorBoard 以便后续观察双 loss 曲线
     report_to="tensorboard"             
 )
 
@@ -99,11 +92,10 @@ trainer = SFTTrainer(
     max_seq_length=512,
     tokenizer=tokenizer,
     args=training_args,
-    # 设置早停机制，patience=3 (连续3个 epoch 验证集 loss 不降则刹车)
+    # 设置早停机制，patience=3 (连续3个epoch验证集loss不降则刹车)
     callbacks=[EarlyStoppingCallback(early_stopping_patience=3)] 
 )
 
-# 6. 开始训练
 print("🚀 开始微调训练！")
 trainer.train()
 
