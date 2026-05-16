@@ -6,11 +6,11 @@ from rouge_chinese import Rouge
 CSV_PATH = "eval_results.csv"
 
 def main():
-    print(f"正在读取 {CSV_PATH} 计算传统 NLP 指标...")
+    print(f"读取{CSV_PATH}计算传统NLP指标")
     try:
         df = pd.read_csv(CSV_PATH)
     except FileNotFoundError:
-        print("错误：未找到 CSV 文件，请先运行 eval_1_style_match.py")
+        print("未找到CSV文件")
         return
 
     rouge = Rouge()
@@ -57,7 +57,7 @@ def main():
 
 
     print("\n" + "="*40)
-    print("📊 文本结构与还原度评估 (N-gram)")
+    print("文本结构与还原度评估 (N-gram)")
     print(pd.DataFrame(metrics).T)
     print("="*40)
 
