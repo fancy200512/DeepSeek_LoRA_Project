@@ -1,5 +1,4 @@
 import os
-# 消除终端里的 libgomp 警告
 os.environ["OMP_NUM_THREADS"] = "1" 
 
 import torch
@@ -9,8 +8,13 @@ from peft import PeftModel
 MODEL_ID = "/root/autodl-tmp/DeepSeek-1.5B"
 LORA_PATH = "./output/het_rank_focal_out/final"
 
-print("1. 加载基座模型与分词器...")
+print("加载基座模型与分词器...")
+# 加载 BPE 分词器，允许执行远程仓库的自定义代码流
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+
+# 实例化基座大语言模型
+# 使用 bfloat16 半精度浮点数加载，大幅降低推理显存占用的同时保证数值稳定性
+# 自动接管底层设备的张量分配
 base_model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
     torch_dtype=torch.bfloat16,
@@ -18,46 +22,53 @@ base_model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True
 )
 
-print("2. 加载异构秩 LoRA 权重...")
+print("加载异构秩 LoRA 权重...")
+# 采用旁路融合机制，将训练好的异构秩 LoRA 矩阵动态挂载到冻结的基座模型上
 model = PeftModel.from_pretrained(base_model, LORA_PATH)
+# 强制模型进入评估模式，冻结 Dropout 等随机层，确保推理的确定性
 model.eval()
 
 question = "多谢姐姐出言相助。今日之恩，没齿难忘。"
-# 强制引导模型进入思维链模式
+
+# 在 prompt 尾部强制写入 <think> 标签，利用自回归模型的特性，诱导其优先输出思维链逻辑
 prompt = f"<|im_start|>user\n{question}<|im_end|>\n<|im_start|>assistant\n<think>\n"
 
 print(f"\n用户: {question}")
 print("甄嬛 (内心盘算中，请稍候...)")
 
+# 将自然语言提示词转换为高维张量，并推送到 GPU 显存中
 inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
 
-# 修正 1：获取正确的结束符 ID
-# 优先使用模型默认的 eos_token，同时兼容将 <|im_end|> 转换为标准 ID
+
 eos_ids = [tokenizer.eos_token_id]
 im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
 if im_end_id is not None:
     eos_ids.append(im_end_id)
 
+# 开启无梯度上下文，彻底释放反向传播所需的计算图显存
 with torch.no_grad():
+    # 触发模型底层的自回归生成管线
     outputs = model.generate(
-        **inputs,
+        # 预留足够的 token 长度以容纳“内部独白”与“最终回复”两段式输出
         max_new_tokens=256, 
+        # 设置采样温度，0.7 可在维持角色逻辑严密性的同时赋予语言一定的创造力
         temperature=0.7,
+        # 引入重复惩罚机制，抑制复读机现象
         repetition_penalty=1.1,
-        eos_token_id=eos_ids, # 使用修正后的合法结束符列表
+        # 传入修正后的结束符池
+        eos_token_id=eos_ids, 
         pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
     )
 
-# 仅解码新生成的部分
+# 利用张量切片操作，剥离输入的 prompt 提示词，精准截取模型本次全新生成的 Token ID
 generated_ids = outputs[0][inputs.input_ids.shape[1]:]
 
-# 修正 2：必须设为 False！保留 <think> 等标签，供我们后续切分
+# 张量解码还原文本
+# skip_special_tokens，以保留底层的 <think> 和 <answer> 结构化标签供业务层正则解析
 full_text = tokenizer.decode(generated_ids, skip_special_tokens=False)
 
-# （可选）你可以取消下面这行的注释，看看模型最原始的生成文本是什么样的
-# print("\n[Debug 原始输出]：", full_text)
-
-# 修正 3：干净地解析出最终回答，并顺手除掉可能残存的 <|im_end|>
+# 结构化文本解析路由
+# 优先精准匹配闭合的 <answer> 标签；若模型偶尔漏掉，则降级通过 </think> 边界进行字符串分割提取
 if "<answer>" in full_text and "</answer>" in full_text:
     answer = full_text.split("<answer>")[-1].split("</answer>")[0]
 elif "</think>" in full_text:
@@ -65,7 +76,7 @@ elif "</think>" in full_text:
 else:
     answer = full_text
 
-# 清理两端空格和潜在的结束符
+# 抹除解码过程中可能残存的系统级对话停止符，并清理两侧空白字符
 answer = answer.replace("<|im_end|>", "").strip()
 
 print("\n--- 最终回复 ---")
