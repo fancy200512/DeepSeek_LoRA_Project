@@ -51,9 +51,6 @@ def main():
     for model in ["Baseline", "Ours"]:
         metrics[model]["BLEU-4"] = round((metrics[model]["BLEU-4"] / valid_samples) * 100, 2)
         metrics[model]["ROUGE-L"] = round((metrics[model]["ROUGE-L"] / valid_samples) * 100, 2)
-        if model == "Ours":
-            metrics[model]["BLEU-4"] += 5.71
-            metrics[model]["ROUGE-L"] += 14.08
 
 
     print("\n" + "="*40)
